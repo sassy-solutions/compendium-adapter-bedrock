@@ -5,16 +5,11 @@
 // </copyright>
 // -----------------------------------------------------------------------
 
+global using System.Runtime.CompilerServices;
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
 global using Compendium.Abstractions.AI;
 global using Compendium.Abstractions.AI.Models;
-global using Message = Compendium.Abstractions.AI.Models.Message;
-global using Compendium.Adapters.Bedrock.Options;
-global using Compendium.Adapters.Bedrock.Services;
 global using Compendium.Core.Results;
-global using FluentAssertions;
 global using Microsoft.Extensions.Logging;
-global using Microsoft.Extensions.Logging.Abstractions;
 global using Microsoft.Extensions.Options;
-global using NSubstitute;
-global using NSubstitute.ExceptionExtensions;
-global using Xunit;

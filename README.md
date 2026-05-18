@@ -1,118 +1,185 @@
-# `template-compendium-adapter-dotnet`
+# Compendium.Adapters.Bedrock
 
-Starter for a new **Compendium** adapter (.NET 9, single-vendor, lives in its own repository).
+[![NuGet](https://img.shields.io/nuget/v/Compendium.Adapters.Bedrock.svg)](https://www.nuget.org/packages/Compendium.Adapters.Bedrock)
 
-Aligns with [ADR 0006](../../docs/adr/0006-multi-repo-adapter-split.md) (split heavy adapters into per-adapter repositories). Encodes the [`compendium-test-author`](.claude/skills/compendium-test-author/SKILL.md) skill so `/tests` and `/coverage` work out of the box.
+AWS Bedrock implementation of Compendium's `IAIProvider` — one adapter, every hosted
+model family : **Anthropic Claude**, **Meta Llama**, **Mistral**, **Amazon Nova**,
+**Amazon Titan**, **Cohere**. Text completions (sync + streaming) flow through
+Bedrock's unified `Converse` / `ConverseStream` API; embeddings flow through
+`InvokeModel` with per-family payload shapes.
 
-## What you get
+This adapter is for callers who want AWS data-residency, IAM-based access control,
+SigV4 auth, and Amazon's commercial terms — not the direct Anthropic API
+(see [`Compendium.Adapters.Anthropic`](https://www.nuget.org/packages/Compendium.Adapters.Anthropic)
+for that).
 
+## Quick start
+
+```csharp
+using Compendium.Abstractions.AI;
+using Compendium.Abstractions.AI.Models;
+using Compendium.Adapters.Bedrock.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddLogging();
+services.AddCompendiumBedrock(o =>
+{
+    o.Region = "us-east-1";
+    o.DefaultModelId = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+    o.EmbeddingModelId = "amazon.titan-embed-text-v2:0";
+    // Credentials default to the AWS SDK chain (env, profile, IAM role).
+});
+
+var sp = services.BuildServiceProvider();
+var ai = sp.GetRequiredService<IAIProvider>();
+
+var result = await ai.CompleteAsync(new CompletionRequest
+{
+    Model = "anthropic.claude-3-haiku-20240307-v1:0",
+    Messages = new List<Message> { Message.User("Hello, Bedrock.") },
+});
+
+Console.WriteLine(result.Value.Content);
 ```
-.
-├── src/Compendium.Adapters.Bedrock/        — the adapter project (rename Bedrock → <Vendor>)
-│   ├── DependencyInjection/
-│   │   └── ServiceCollectionExtensions.cs
-│   ├── Options/BedrockOptions.cs
-│   └── BedrockAdapter.cs                   — illustrates the IAdapter (or any port) shape
-├── tests/Unit/Compendium.Adapters.Bedrock.Tests/
-│   ├── DependencyInjection/ServiceCollectionExtensionsTests.cs
-│   ├── Options/BedrockOptionsTests.cs
-│   └── GlobalUsings.cs
-├── .github/workflows/ci.yml               — build + test + 90% coverage gate
-├── .claude/skills/compendium-test-author/SKILL.md
-├── .claude/commands/{tests,coverage}.md
-├── .config/dotnet-tools.json              — pins ReportGenerator
-├── Directory.Build.props
-├── Directory.Packages.props               — central package management
-├── Compendium.Adapters.Bedrock.sln
-├── global.json                            — pins .NET 9 SDK
-└── LICENSE
-```
 
-## Conventions enforced (copy from Compendium framework)
-
-| Aspect | Choice |
-|---|---|
-| Test framework | xUnit 2.9.3 |
-| Assertions | FluentAssertions 6.12.1 — never `Assert.*` |
-| Mocks | NSubstitute 5.1.0 — never Moq |
-| Coverage | coverlet.collector 6.0.2 + ReportGenerator (local tool) |
-| Result pattern | `Result<T>` from `Compendium.Abstractions` (NuGet) |
-| Async | `async Task` + cancellation tokens — never `Thread.Sleep`, never `.Result` |
-| Test naming | `{SUT}Tests` / `{Method}_{Scenario}_{Expected}` |
-| Test layout | AAA explicit (`// Arrange / // Act / // Assert`) |
-| File header | Sassy Solutions copyright block |
-| HTTP mocking (when applicable) | `RichardSzalay.MockHttp` 7.0.0 |
-| Container fixtures (integration) | `Testcontainers` 4.11.0 + `IAsyncLifetime` + `[RequiresDockerFact]` |
-| CI gate | ≥ 90 % line coverage on the unit-testable surface (DB-bound types may be exempted with documented reason) |
-
-## How to scaffold a new adapter
+Run the sample :
 
 ```bash
-# 1. Pick a vendor name (use PascalCase: Stripe, PostgreSQL, Redis…)
-export VENDOR=Stripe
-
-# 2. Copy the template to a new directory next to your Compendium clone
-cp -r templates/adapter-dotnet ../compendium-adapter-${VENDOR,,}
-cd ../compendium-adapter-${VENDOR,,}
-
-# 3. Find-and-replace placeholders (BSD sed on macOS — adapt for GNU sed)
-find . -type f \( -name '*.cs' -o -name '*.csproj' -o -name '*.sln' -o -name '*.md' -o -name '*.yml' -o -name '*.json' -o -name '*.props' \) -exec sed -i '' -e "s/Bedrock/${VENDOR}/g" -e "s/bedrock/${VENDOR,,}/g" {} +
-
-# 4. Rename folders/files
-git mv src/Compendium.Adapters.Bedrock              src/Compendium.Adapters.${VENDOR}
-git mv src/Compendium.Adapters.${VENDOR}/Compendium.Adapters.Bedrock.csproj \
-       src/Compendium.Adapters.${VENDOR}/Compendium.Adapters.${VENDOR}.csproj
-git mv src/Compendium.Adapters.${VENDOR}/BedrockAdapter.cs                   \
-       src/Compendium.Adapters.${VENDOR}/${VENDOR}Adapter.cs
-git mv src/Compendium.Adapters.${VENDOR}/Options/BedrockOptions.cs           \
-       src/Compendium.Adapters.${VENDOR}/Options/${VENDOR}Options.cs
-
-git mv tests/Unit/Compendium.Adapters.Bedrock.Tests           tests/Unit/Compendium.Adapters.${VENDOR}.Tests
-git mv tests/Unit/Compendium.Adapters.${VENDOR}.Tests/Compendium.Adapters.Bedrock.Tests.csproj \
-       tests/Unit/Compendium.Adapters.${VENDOR}.Tests/Compendium.Adapters.${VENDOR}.Tests.csproj
-git mv tests/Unit/Compendium.Adapters.${VENDOR}.Tests/Options/BedrockOptionsTests.cs \
-       tests/Unit/Compendium.Adapters.${VENDOR}.Tests/Options/${VENDOR}OptionsTests.cs
-
-mv Compendium.Adapters.Bedrock.sln Compendium.Adapters.${VENDOR}.sln
-
-# 5. Initialise git and verify build
-git init
-git add .
-dotnet build -c Release
-dotnet test  -c Release
+AWS_REGION=us-east-1 dotnet run --project samples/01-chat-with-claude-via-bedrock
 ```
 
-## What you still need to do per repo
+## IAM policy
 
-After scaffolding :
+The runtime adapter needs only data-plane permissions :
 
-- **Author the actual adapter code.** Replace `BedrockAdapter` with the real implementation of whatever port (`IEventStore`, `IIdentityProvider`, `IBillingProvider`, `IEmailSender`, …) you're filling.
-- **NuGet publishing.** Add `NUGET_API_KEY` to repo secrets ; the included `release.yml` (TODO — add when first needed) packs and pushes on `v*` tags.
-- **Branch protection.** Require `build-test` (CI), at least one review, no force-push to `main`.
-- **Renovate or Dependabot.** Renovate config at `renovate.json` — track Compendium NuGets so a framework release auto-PRs the adapter. Dependabot for npm-style scheduled dep bumps.
-- **Integration tests** (optional but recommended for adapters with external systems). Add `tests/Integration/Compendium.Adapters.<Vendor>.IntegrationTests/` with `Testcontainers` if needed. Keep them out of the unit CI job.
-
-## Local-dev mode (when you're modifying both framework and adapter)
-
-Edit `Directory.Packages.props` to add a project reference instead of the NuGet :
-
-```xml
-<ItemGroup Condition="'$(LinkLocalCompendium)' == 'true'">
-  <PackageReference Remove="Compendium.Abstractions" />
-  <ProjectReference Include="../compendium/src/Abstractions/Compendium.Abstractions/Compendium.Abstractions.csproj" />
-</ItemGroup>
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BedrockRuntime",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:Converse",
+        "bedrock:ConverseStream",
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/*",
+        "arn:aws:bedrock:*:*:inference-profile/*"
+      ]
+    }
+  ]
+}
 ```
 
-Then `dotnet build -p:LinkLocalCompendium=true`.
+Scope `Resource` down to specific model ARNs in production. The adapter does **not**
+require `bedrock:ListFoundationModels` — the model catalog is curated in-package.
 
-## Common pitfalls (read before pushing)
+## Options
 
-- **Broken `Compendium.sln`** : every `Project("{...}")` MUST have a matching `EndProject` on the next non-empty line, and every GUID listed in `Project(...)` MUST appear in the `GlobalSection(ProjectConfigurationPlatforms)` (4 `.Debug|Any CPU.*` + `.Release|Any CPU.*` lines). Linux CI is strict ; macOS is lenient and will mask this bug. **Always** use `dotnet sln add` / `dotnet sln remove` instead of hand-editing the sln. Verify with `dotnet sln list && dotnet build -c Release` before pushing.
-- **`gh pr merge` from a detached worktree** : fails opaquely with "could not determine current branch". Always run merges from a checkout that's on a named branch (typically `main`).
-- **MinVer tag prefix** : pinned to `v` in `Directory.Build.props`. The first tag must continue the version sequence of the package's previous releases (e.g. if `Compendium.Adapters.Stripe` was last published as `1.0.0-preview.8` from the framework, the first tag here is `v1.0.0-preview.9`).
-- **No `--no-verify`, no `--force-push`** (use `--force-with-lease` instead). No version bumps in `Directory.Packages.props` outside of Renovate-managed PRs.
-- **Skill / commands** : `.claude/skills/compendium-test-author/SKILL.md` and `.claude/commands/{tests,coverage}.md` ship pre-baked. `/tests` and `/coverage` work out of the box in Claude Code.
+| Property            | Default                                          | Notes |
+|---------------------|--------------------------------------------------|-------|
+| `Region`            | _(required)_                                     | e.g. `us-east-1`. Bedrock model availability varies by region. |
+| `AccessKey`         | `null`                                           | Optional override. Prefer IAM roles in production. |
+| `SecretKey`         | `null`                                           | Paired with `AccessKey`. |
+| `SessionToken`      | `null`                                           | Optional STS session token for assumed-role credentials. |
+| `DefaultModelId`    | `anthropic.claude-3-5-sonnet-20241022-v2:0`       | Used when `CompletionRequest.Model` is null/blank. |
+| `EmbeddingModelId`  | `amazon.titan-embed-text-v2:0`                   | Auto-detects Titan vs Cohere by id prefix. |
+| `DefaultMaxTokens`  | `4096`                                           | Used when `CompletionRequest.MaxTokens` is null. |
+| `Timeout`           | `120s`                                           | Per-request timeout. |
+| `MaxRetries`        | `3`                                              | AWS SDK retry attempts for transient errors. |
+
+Bind from `IConfiguration` :
+
+```jsonc
+{
+  "Compendium": {
+    "Adapters": {
+      "Bedrock": {
+        "Region": "us-east-1",
+        "DefaultModelId": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "EmbeddingModelId": "amazon.titan-embed-text-v2:0"
+      }
+    }
+  }
+}
+```
+
+```csharp
+services.AddCompendiumBedrock(Configuration);
+```
+
+## Model id routing
+
+Bedrock's `Converse` API is family-agnostic — the adapter passes the model id
+through as-is. Use the canonical Bedrock id format :
+
+- `anthropic.claude-3-5-sonnet-20241022-v2:0`
+- `anthropic.claude-3-haiku-20240307-v1:0` (cheapest Claude — great default for dev/CI)
+- `meta.llama3-1-70b-instruct-v1:0`
+- `mistral.mistral-large-2407-v1:0`
+- `amazon.nova-pro-v1:0`
+
+Cross-region inference profiles work too :
+
+- `us.anthropic.claude-3-5-sonnet-20241022-v2:0`
+- `eu.anthropic.claude-3-5-sonnet-20241022-v2:0`
+
+Embeddings auto-detect the family by id prefix :
+
+- `amazon.titan-embed-*` → Titan single-text per call, supports the `dimensions` hint.
+- `cohere.embed-*` → Cohere batch (one HTTP call for the whole input list), defaults to
+  `input_type = "search_document"`.
+
+Unknown embedding ids fail fast with `AI.InvalidRequest`.
+
+## Billing & throughput
+
+Bedrock offers two billing modes per model :
+
+1. **On-demand** — pay per token. The default; just call the adapter.
+2. **Provisioned throughput** — pay for reserved capacity by the hour. Set
+   `DefaultModelId` to the **provisioned model ARN** (`arn:aws:bedrock:...:provisioned-model/...`)
+   and the adapter routes there.
+
+Prompt caching (currently Anthropic-only on Bedrock) is **not** yet exposed by this
+preview; it will land behind a `BedrockOptions.EnablePromptCaching` flag in a follow-up.
+
+## Data residency
+
+All requests stay within the configured `Region`. Bedrock does not train on your
+prompts. For workloads with strict residency requirements, pick a region in the
+appropriate AWS partition (`eu-central-1`, `ap-northeast-1`, GovCloud, ...) and
+confirm model availability with `aws bedrock list-foundation-models`.
+
+## Production checklist
+
+- [ ] **IAM role**, not static access keys — use EKS pod identity or EC2 instance profile.
+- [ ] **Region pinning** — set `Region` explicitly; do not rely on the AWS SDK's
+      `AWS_REGION` env var alone in multi-region deployments.
+- [ ] **Scope IAM resources** to specific model ARNs.
+- [ ] **Set `MaxRetries`** in line with your latency SLO — Bedrock returns 429 under load.
+- [ ] **Log via `ILogger<BedrockAIProvider>`** — turn it on for failed-request diagnostics.
+- [ ] **Hook a health check** — `HealthCheckAsync()` sends a 1-token probe.
+- [ ] **Cap `DefaultMaxTokens`** to avoid runaway costs from misbehaving callers.
+- [ ] **Pin the model id** — Bedrock occasionally retires legacy versions.
+
+## Tool calling & vision
+
+Native Bedrock support for tool calling (`ToolConfiguration`) and vision
+(`ImageBlock`) is **not** exposed on the `IAIProvider` surface — that contract is
+text-only. The agent loop in `Compendium.Application` owns tool calling; a typed
+Bedrock-native client surfacing vision and tools will land in a follow-up preview.
+
+## Compatibility
+
+| Package version | `Compendium.Abstractions.AI` | `AWSSDK.BedrockRuntime` |
+|-----------------|------------------------------|-------------------------|
+| `1.0.0-preview.0` | `1.0.1`                    | `4.0.17.9`              |
 
 ## License
 
-MIT — same as Compendium itself.
+MIT — see [LICENSE](LICENSE).
