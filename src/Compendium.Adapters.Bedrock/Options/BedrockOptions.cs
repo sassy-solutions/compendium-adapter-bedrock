@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------
-// <copyright file="SampleOptions.cs" company="Sassy Solutions">
+// <copyright file="BedrockOptions.cs" company="Sassy Solutions">
 //     Copyright (c) 2026 Sassy Solutions. Licensed under the MIT License.
 //     See LICENSE in the project root for license information.
 // </copyright>
@@ -7,17 +7,17 @@
 
 using System.ComponentModel.DataAnnotations;
 
-namespace Compendium.Adapters.Sample.Options;
+namespace Compendium.Adapters.Bedrock.Options;
 
 /// <summary>
-/// Configuration for <see cref="SampleAdapter"/>.
+/// Configuration for <see cref="BedrockAdapter"/>.
 /// </summary>
-public sealed class SampleOptions
+public sealed class BedrockOptions
 {
     /// <summary>
     /// Configuration section name used by <c>IConfiguration.GetSection(...)</c>.
     /// </summary>
-    public const string SectionName = "Compendium:Adapters:Sample";
+    public const string SectionName = "Compendium:Adapters:Bedrock";
 
     /// <summary>
     /// Vendor base URL. Required.
