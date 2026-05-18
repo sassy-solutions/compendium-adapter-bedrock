@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Compendium.Adapters.Bedrock.Samples.Chat</RootNamespace>
+    <AssemblyName>Sample.Chat</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Compendium.Adapters.Bedrock\Compendium.Adapters.Bedrock.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Compendium.Core" />
+    <PackageReference Include="Compendium.Abstractions" />
+    <PackageReference Include="Compendium.Abstractions.AI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+</Project>

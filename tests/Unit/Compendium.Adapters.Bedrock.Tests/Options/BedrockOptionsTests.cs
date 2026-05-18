@@ -5,62 +5,92 @@
 // </copyright>
 // -----------------------------------------------------------------------
 
-using System.ComponentModel.DataAnnotations;
-using Compendium.Adapters.Bedrock.Options;
+using Microsoft.Extensions.Configuration;
 
 namespace Compendium.Adapters.Bedrock.Tests.Options;
 
-/// <summary>
-/// Demonstrates the convention every adapter test follows :
-/// <list type="bullet">
-///   <item>file copyright header</item>
-///   <item>class named <c>{SUT}Tests</c></item>
-///   <item>method named <c>{Method}_{Scenario}_{Expected}</c></item>
-///   <item>explicit <c>// Arrange / // Act / // Assert</c> comments</item>
-///   <item>FluentAssertions only — never <c>Assert.*</c></item>
-/// </list>
-/// </summary>
 public class BedrockOptionsTests
 {
     [Fact]
-    public void BedrockOptions_Defaults_AreSensible()
+    public void Defaults_AreSensible()
     {
-        // Arrange / Act
-        var options = new BedrockOptions();
+        var opts = new BedrockOptions();
 
-        // Assert
-        options.Timeout.Should().Be(TimeSpan.FromSeconds(30));
-        options.BaseUrl.Should().BeEmpty();
-        options.ApiKey.Should().BeEmpty();
-    }
-
-    [Theory]
-    [InlineData("", "key", false)]
-    [InlineData("   ", "key", false)]
-    [InlineData("not-a-url", "key", false)]
-    [InlineData("https://api.example.com", "", false)]
-    [InlineData("https://api.example.com", "valid-key", true)]
-    public void BedrockOptions_DataAnnotations_ValidateAsExpected(
-        string baseUrl,
-        string apiKey,
-        bool expectedValid)
-    {
-        // Arrange
-        var options = new BedrockOptions { BaseUrl = baseUrl, ApiKey = apiKey };
-        var ctx = new ValidationContext(options);
-        var results = new List<ValidationResult>();
-
-        // Act
-        var actual = Validator.TryValidateObject(options, ctx, results, validateAllProperties: true);
-
-        // Assert
-        actual.Should().Be(expectedValid);
+        opts.DefaultModelId.Should().Be(BedrockOptions.DefaultClaude35SonnetV2ModelId);
+        opts.EmbeddingModelId.Should().Be(BedrockOptions.DefaultTitanEmbedTextV2ModelId);
+        opts.DefaultMaxTokens.Should().Be(4096);
+        opts.Timeout.Should().Be(TimeSpan.FromSeconds(120));
+        opts.MaxRetries.Should().Be(3);
+        opts.Region.Should().BeEmpty();
+        opts.AccessKey.Should().BeNull();
+        opts.SecretKey.Should().BeNull();
+        opts.SessionToken.Should().BeNull();
     }
 
     [Fact]
-    public void BedrockOptions_SectionName_IsCanonical()
+    public void IsValid_RequiresRegionAndModelIds()
     {
-        // Assert
-        BedrockOptions.SectionName.Should().Be("Compendium:Adapters:Bedrock");
+        var opts = new BedrockOptions();
+        opts.IsValid().Should().BeFalse();
+
+        opts.Region = "us-east-1";
+        opts.IsValid().Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(" ", false)]
+    [InlineData("us-east-1", true)]
+    public void IsValid_RegionMustBeNonBlank(string region, bool expected)
+    {
+        var opts = new BedrockOptions { Region = region };
+        opts.IsValid().Should().Be(expected);
+    }
+
+    [Fact]
+    public void IsValid_RejectsZeroMaxTokensAndNegativeTimeouts()
+    {
+        var opts = new BedrockOptions { Region = "us-east-1", DefaultMaxTokens = 0 };
+        opts.IsValid().Should().BeFalse();
+
+        opts.DefaultMaxTokens = 10;
+        opts.Timeout = TimeSpan.Zero;
+        opts.IsValid().Should().BeFalse();
+
+        opts.Timeout = TimeSpan.FromSeconds(5);
+        opts.MaxRetries = -1;
+        opts.IsValid().Should().BeFalse();
+    }
+
+    [Fact]
+    public void BindsFromConfigurationSection()
+    {
+        var dict = new Dictionary<string, string?>
+        {
+            ["Compendium:Adapters:Bedrock:Region"] = "eu-west-1",
+            ["Compendium:Adapters:Bedrock:AccessKey"] = "AKIAEXAMPLE",
+            ["Compendium:Adapters:Bedrock:SecretKey"] = "secret",
+            ["Compendium:Adapters:Bedrock:SessionToken"] = "session",
+            ["Compendium:Adapters:Bedrock:DefaultModelId"] = "anthropic.claude-3-haiku-20240307-v1:0",
+            ["Compendium:Adapters:Bedrock:EmbeddingModelId"] = "cohere.embed-english-v3",
+            ["Compendium:Adapters:Bedrock:DefaultMaxTokens"] = "777",
+            ["Compendium:Adapters:Bedrock:MaxRetries"] = "5",
+            ["Compendium:Adapters:Bedrock:Timeout"] = "00:00:30",
+        };
+        var cfg = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var opts = new BedrockOptions();
+        cfg.GetSection(BedrockOptions.SectionName).Bind(opts);
+
+        opts.Region.Should().Be("eu-west-1");
+        opts.AccessKey.Should().Be("AKIAEXAMPLE");
+        opts.SecretKey.Should().Be("secret");
+        opts.SessionToken.Should().Be("session");
+        opts.DefaultModelId.Should().Be("anthropic.claude-3-haiku-20240307-v1:0");
+        opts.EmbeddingModelId.Should().Be("cohere.embed-english-v3");
+        opts.DefaultMaxTokens.Should().Be(777);
+        opts.MaxRetries.Should().Be(5);
+        opts.Timeout.Should().Be(TimeSpan.FromSeconds(30));
+        opts.IsValid().Should().BeTrue();
     }
 }
